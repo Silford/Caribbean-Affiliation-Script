@@ -22,7 +22,9 @@ The script processes an Excel file containing DOIs and outputs:
 * Caribbean classification 
 * Manual review sheet for unresolved cases
 
-🔍 Classification Rule
+  
+
+## 🔍 **Classification Rule**
 A publication is classed as Caribbean = Yes **IF**:
 * At least one author is affiliated with a recognized Caribbean university  
                                          
@@ -33,6 +35,7 @@ A publication is classed as Caribbean = Yes **IF**:
 If none of the authors meet this condition, the publication is classified as: **Caribbean = No**
 
 If metadata cannot be retried from OpenAlex nor CrossRef, the publication is flagged : **Needs Manual Verification**
+
 
 
 
@@ -56,6 +59,7 @@ If metadata cannot be retried from OpenAlex nor CrossRef, the publication is fla
           ***input_results.xlsx***
  
 
+
 ## 📂 Input Format
 Your Excel file must contain: 
 |Column Name|Required  |
@@ -68,6 +72,8 @@ Example:
 |10.1002/cjas.1296|
 
 Rows without DOI are skipped.
+
+
 
 ## 📤 Output Files
 The script generates:
@@ -86,6 +92,8 @@ The script generates:
  - DOI
  - Title
  - Reason
+
+
 
 ## 🚀 **Installation**
 
@@ -113,12 +121,15 @@ Then run:
 
     input_results.xlsx
 
+
+
 ## ⚡Performance
 * Uses ThreadPoolExecutor for parallel API requests
 * Suitable for processing 1000-5000 DOIs
 * Typical speed: ~20-50 records per second (depending on network speed)
-## ⚠️Limitations
 
+  
+## ⚠️Limitations
 * Only processes rows with DOI
 * If OpenAlex or CrossRef does not index a DOI, it is marked for manual review
 * Some regional journals may not be indexed in OpenAlex or CrossRef
