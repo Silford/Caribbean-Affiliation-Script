@@ -46,8 +46,8 @@ If metadata cannot be retried from OpenAlex nor CrossRef, the publication is fla
 3. Skips rows without DOI
 4. Queries OpenAlex & CrossRef (fallback) using direct DOI endpoint: 
 
-    https://api.openalex.org/works/https://doi.org/{DOI}
-    https://api.crossref.org/works/{doi}
+    * https://api.openalex.org/works/https://doi.org/{DOI}
+    * https://api.crossref.org/works/{doi}
 
 5. Extracts: 
 	* *Title*
