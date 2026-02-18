@@ -71,6 +71,7 @@ def fetch_crossref_by_doi(doi):
 # -----------------------------
 def extract_openalex(work):
     resolved_title = work.get("display_name", "") or ""
+    url = work.get("canonical_url", "") or ""
 
     authors_list = []
     universities_list = []
@@ -100,15 +101,17 @@ def extract_openalex(work):
         " | ".join(sorted(set(authors_list))),
         " | ".join(sorted(set(universities_list))),
         " | ".join(sorted(set(countries_list))),
-        "Yes" if is_caribbean else "No"
+        "Yes" if is_caribbean else "No",
+        url
     )
 
 # -----------------------------
 # Extract + Classify (Crossref)
 # -----------------------------
-def extract_crossref(work):
+def extract_crossref(work, doi=""):
     titles = work.get("title", [])
     resolved_title = titles[0] if titles else ""
+    url = f"https://doi.org/{doi}" if doi else ""
 
     authors_list = []
     universities_list = []
@@ -140,6 +143,7 @@ def extract_crossref(work):
         " | ".join(sorted(set(universities_list))),
         " | ".join(sorted(set(countries_list))),
         "Yes" if is_caribbean else "No",
+        url
     )
 
 # -----------------------------
@@ -149,24 +153,24 @@ def process_row(row):
     doi = str(row.get("DOI", "")).strip()
 
     if not doi:
-        return "", "", "", "", "Needs Manual Verification", "", ""
+        return "", "", "", "", "Needs Manual Verification", ""
 
     doi = doi.rstrip(".,);")
 
     # 1️⃣ Try OpenAlex
     work = fetch_openalex_by_doi(doi)
     if work:
-        resolved_title, authors, universities, countries, caribbean = extract_openalex(work)
-        return resolved_title, authors, universities, countries, caribbean, doi
+        resolved_title, authors, universities, countries, caribbean, url = extract_openalex(work)
+        return resolved_title, authors, universities, countries, caribbean, url
 
     # 2️⃣ Fallback to Crossref
     work = fetch_crossref_by_doi(doi)
     if work:
-        resolved_title, authors, universities, countries, caribbean = extract_crossref(work)
-        return resolved_title, authors, universities, countries, caribbean, doi
+        resolved_title, authors, universities, countries, caribbean, url = extract_crossref(work, doi)
+        return resolved_title, authors, universities, countries, caribbean, url
 
     # 3️⃣ Manual
-    return "", "", "", "", "Needs Manual Verification", "", doi
+    return "", "", "", "", "Needs Manual Verification", ""
 
 # -----------------------------
 # RUN
@@ -186,7 +190,7 @@ authors_col = [""] * n
 universities_col = [""] * n
 countries_col = [""] * n
 caribbean_col = ["Needs Manual Verification"] * n
-final_doi_col = [""] * n
+url_col = [""] * n
 
 manual_review = []
 
@@ -195,20 +199,21 @@ with ThreadPoolExecutor(max_workers=10) as executor:
 
     for future in tqdm(as_completed(futures), total=n):
         i = futures[future]
-        resolved_title, authors, universities, countries, caribbean, doi = future.result()
+        resolved_title, authors, universities, countries, caribbean, url = future.result()
 
         resolved_titles[i] = resolved_title
         authors_col[i] = authors
         universities_col[i] = universities
         countries_col[i] = countries
         caribbean_col[i] = caribbean
-        final_doi_col[i] = doi
+        url_col[i] = url
 
         if caribbean == "Needs Manual Verification":
             manual_review.append({
                 "Row_Number": i + 1,
-                "DOI": doi,
+                "DOI": df.iloc[i].get("DOI", ""),
                 "Title": df.iloc[i].get("Title", ""),
+                "URL": url,
                 "Reason": "Not found in OpenAlex or Crossref"
             })
 
@@ -217,6 +222,7 @@ df["Authors"] = authors_col
 df["Universities"] = universities_col
 df["Countries"] = countries_col
 df["Caribbean"] = caribbean_col
+df["URL"] = url_col
 
 manual_df = pd.DataFrame(manual_review)
 
