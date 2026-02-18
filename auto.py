@@ -71,7 +71,6 @@ def fetch_crossref_by_doi(doi):
 # -----------------------------
 def extract_openalex(work):
     resolved_title = work.get("display_name", "") or ""
-    canonical_url = work.get("canonical_url", "") or ""
 
     authors_list = []
     universities_list = []
@@ -101,8 +100,7 @@ def extract_openalex(work):
         " | ".join(sorted(set(authors_list))),
         " | ".join(sorted(set(universities_list))),
         " | ".join(sorted(set(countries_list))),
-        "Yes" if is_caribbean else "No",
-        canonical_url
+        "Yes" if is_caribbean else "No"
     )
 
 # -----------------------------
@@ -111,7 +109,6 @@ def extract_openalex(work):
 def extract_crossref(work):
     titles = work.get("title", [])
     resolved_title = titles[0] if titles else ""
-    canonical_url = f"https://doi.org/{work.get('DOI','')}"
 
     authors_list = []
     universities_list = []
@@ -143,7 +140,6 @@ def extract_crossref(work):
         " | ".join(sorted(set(universities_list))),
         " | ".join(sorted(set(countries_list))),
         "Yes" if is_caribbean else "No",
-        canonical_url
     )
 
 # -----------------------------
@@ -160,14 +156,14 @@ def process_row(row):
     # 1️⃣ Try OpenAlex
     work = fetch_openalex_by_doi(doi)
     if work:
-        resolved_title, authors, universities, countries, caribbean, canonical_url = extract_openalex(work)
-        return resolved_title, authors, universities, countries, caribbean, canonical_url, doi
+        resolved_title, authors, universities, countries, caribbean = extract_openalex(work)
+        return resolved_title, authors, universities, countries, caribbean, doi
 
     # 2️⃣ Fallback to Crossref
     work = fetch_crossref_by_doi(doi)
     if work:
-        resolved_title, authors, universities, countries, caribbean, canonical_url = extract_crossref(work)
-        return resolved_title, authors, universities, countries, caribbean, canonical_url, doi
+        resolved_title, authors, universities, countries, caribbean = extract_crossref(work)
+        return resolved_title, authors, universities, countries, caribbean, doi
 
     # 3️⃣ Manual
     return "", "", "", "", "Needs Manual Verification", "", doi
@@ -190,7 +186,6 @@ authors_col = [""] * n
 universities_col = [""] * n
 countries_col = [""] * n
 caribbean_col = ["Needs Manual Verification"] * n
-canonical_url_col = [""] * n
 final_doi_col = [""] * n
 
 manual_review = []
@@ -200,14 +195,13 @@ with ThreadPoolExecutor(max_workers=10) as executor:
 
     for future in tqdm(as_completed(futures), total=n):
         i = futures[future]
-        resolved_title, authors, universities, countries, caribbean, canonical_url, doi = future.result()
+        resolved_title, authors, universities, countries, caribbean, doi = future.result()
 
         resolved_titles[i] = resolved_title
         authors_col[i] = authors
         universities_col[i] = universities
         countries_col[i] = countries
         caribbean_col[i] = caribbean
-        canonical_url_col[i] = canonical_url
         final_doi_col[i] = doi
 
         if caribbean == "Needs Manual Verification":
@@ -223,7 +217,6 @@ df["Authors"] = authors_col
 df["Universities"] = universities_col
 df["Countries"] = countries_col
 df["Caribbean"] = caribbean_col
-df["Canonical_URL"] = canonical_url_col
 
 manual_df = pd.DataFrame(manual_review)
 
