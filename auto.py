@@ -4,13 +4,22 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 import os
 
+# -----------------------------
+# Caribbean Country List
+# -----------------------------
 CARIBBEAN_COUNTRIES = {
-    "Jamaica", "Trinidad and Tobago", "Barbados", "Bahamas", "Antigua and Barbuda",
-    "Saint Lucia", "Grenada", "Dominica", "Saint Vincent and the Grenadines",
-    "Guyana", "Suriname", "Haiti", "Dominican Republic", "Belize", "Montserrat", 
-    "Saint Kitts and Nevis", "St. Lucia", "St. Vincent and the Grenadines", "St. Kitts and Nevis"
+    "Jamaica", "Trinidad and Tobago", "Barbados", "Bahamas",
+    "Antigua and Barbuda", "Saint Lucia", "Grenada", "Dominica",
+    "Saint Vincent and the Grenadines", "Guyana", "Suriname",
+    "Haiti", "Dominican Republic", "Belize",
+    "Montserrat", "Saint Kitts and Nevis",
+    "St. Lucia", "St. Vincent and the Grenadines",
+    "St. Kitts and Nevis"
 }
 
+# -----------------------------
+# Caribbean Universities
+# -----------------------------
 UNIVERSITIES = {
     "University of Guyana",
     "University of the Netherlands Antilles",
@@ -27,66 +36,51 @@ UNIVERSITIES = {
     "Universidad de la Habana"
 }
 
-def fix_encoding(text):
-    if isinstance(text, str):
-        try:
-            return text.encode("latin1").decode("utf-8")
-        except:
-            return text
-    return text
-
-def fetch_from_openalex(doi=None, title=None):
+# -----------------------------
+# OpenAlex Lookup
+# -----------------------------
+def fetch_openalex_by_doi(doi):
     try:
-        if doi:
-            url = f"https://api.openalex.org/works?filter=doi:{doi}"
-        elif title:
-            url = f"https://api.openalex.org/works?search={title}"
-        else:
-            return None
-
+        url = f"https://api.openalex.org/works/https://doi.org/{doi}"
         r = requests.get(url, timeout=10)
+
         if r.status_code != 200:
             return None
 
-        data = r.json()
-        if not data.get("results"):
-            return None
-        return data["results"][0]
+        return r.json()
     except:
         return None
 
-def fetch_from_crossref(doi=None, title=None):
+# -----------------------------
+# Crossref Lookup (Fallback)
+# -----------------------------
+def fetch_crossref_by_doi(doi):
     try:
-        if doi:
-            url = f"https://api.crossref.org/works/{doi}"
-        elif title:
-            url = f"https://api.crossref.org/works?query.title={title}&rows=1"
-        else:
-            return None
-
+        url = f"https://api.crossref.org/works/{doi}"
         r = requests.get(url, timeout=10)
+
         if r.status_code != 200:
             return None
 
-        data = r.json()
-
-        if doi:
-            return data.get("message")
-        else:
-            items = data.get("message", {}).get("items", [])
-            if not items:
-                return None
-            return items[0]
+        return r.json().get("message")
     except:
         return None
 
+# -----------------------------
+# Extract + Classify (OpenAlex)
+# -----------------------------
 def extract_openalex(work):
     resolved_title = work.get("display_name", "") or ""
-    authors_list, universities_list, countries_list = [], [], []
+    canonical_url = work.get("canonical_url", "") or ""
+
+    authors_list = []
+    universities_list = []
+    countries_list = []
     is_caribbean = False
 
     for author in work.get("authorships", [])[:10]:
         authors_list.append(author["author"]["display_name"])
+
         for inst in author.get("institutions", []):
             inst_name = inst.get("display_name", "") or ""
             country = inst.get("country", "") or ""
@@ -107,23 +101,30 @@ def extract_openalex(work):
         " | ".join(sorted(set(authors_list))),
         " | ".join(sorted(set(universities_list))),
         " | ".join(sorted(set(countries_list))),
-        "Yes" if is_caribbean else "No"
+        "Yes" if is_caribbean else "No",
+        canonical_url
     )
 
+# -----------------------------
+# Extract + Classify (Crossref)
+# -----------------------------
 def extract_crossref(work):
     titles = work.get("title", [])
-    resolved_title = titles[0] if isinstance(titles, list) and titles else ""
+    resolved_title = titles[0] if titles else ""
+    canonical_url = f"https://doi.org/{work.get('DOI','')}"
 
-    authors_list, universities_list, countries_list = [], [], []
+    authors_list = []
+    universities_list = []
+    countries_list = []
     is_caribbean = False
 
     for author in work.get("author", [])[:10]:
-        name = f"{author.get('given', '')} {author.get('family', '')}".strip()
+        name = f"{author.get('given','')} {author.get('family','')}".strip()
         if name:
             authors_list.append(name)
 
         for aff in author.get("affiliation", []):
-            inst_name = aff.get("name", "") or ""
+            inst_name = aff.get("name", "")
             if inst_name:
                 universities_list.append(inst_name)
 
@@ -131,7 +132,6 @@ def extract_crossref(work):
                     if uni.lower() in inst_name.lower():
                         is_caribbean = True
 
-                # Crossref often doesn't provide a separate country field; detect in text
                 for c in CARIBBEAN_COUNTRIES:
                     if c.lower() in inst_name.lower():
                         countries_list.append(c)
@@ -142,81 +142,96 @@ def extract_crossref(work):
         " | ".join(sorted(set(authors_list))),
         " | ".join(sorted(set(universities_list))),
         " | ".join(sorted(set(countries_list))),
-        "Yes" if is_caribbean else "No"
+        "Yes" if is_caribbean else "No",
+        canonical_url
     )
 
-def fetch_metadata_for_row(row):
-    doi = fix_encoding(str(row.get("DOI", "")).strip())
-    title = fix_encoding(str(row.get("Title", "")).strip())
+# -----------------------------
+# Process Row
+# -----------------------------
+def process_row(row):
+    doi = str(row.get("DOI", "")).strip()
 
-    # OpenAlex first
-    work = fetch_from_openalex(doi=doi if doi else None,
-                               title=title if (not doi and title) else None)
+    if not doi:
+        return "", "", "", "", "Needs Manual Verification", "", ""
+
+    doi = doi.rstrip(".,);")
+
+    # 1️⃣ Try OpenAlex
+    work = fetch_openalex_by_doi(doi)
     if work:
-        return extract_openalex(work)
+        resolved_title, authors, universities, countries, caribbean, canonical_url = extract_openalex(work)
+        return resolved_title, authors, universities, countries, caribbean, canonical_url, doi
 
-    # Crossref fallback
-    work = fetch_from_crossref(doi=doi if doi else None,
-                               title=title if (not doi and title) else None)
+    # 2️⃣ Fallback to Crossref
+    work = fetch_crossref_by_doi(doi)
     if work:
-        return extract_crossref(work)
+        resolved_title, authors, universities, countries, caribbean, canonical_url = extract_crossref(work)
+        return resolved_title, authors, universities, countries, caribbean, canonical_url, doi
 
-    return "", "", "", "", "Unknown"
-
+    # 3️⃣ Manual
+    return "", "", "", "", "Needs Manual Verification", "", doi
 
 # -----------------------------
-# Run
+# RUN
 # -----------------------------
-INPUT_FILE = "test_input.xlsx"  # change this
+INPUT_FILE = "input.xlsx"
+
 df = pd.read_excel(INPUT_FILE)
 
-# fix encoding across all text cells (helps titles)
-df = df.applymap(fix_encoding)
+df = df.dropna(how="all")
+df = df[df["DOI"].astype(str).str.strip() != ""]
+df = df.reset_index(drop=True)
 
-# safe duplicate removal
-existing_columns = [c for c in ["DOI", "Title"] if c in df.columns]
-if existing_columns:
-    df = df.drop_duplicates(subset=existing_columns)
-
-# Pre-allocate result arrays by row count (prevents misalignment)
 n = len(df)
+
 resolved_titles = [""] * n
 authors_col = [""] * n
 universities_col = [""] * n
 countries_col = [""] * n
-caribbean_col = ["Unknown"] * n
+caribbean_col = ["Needs Manual Verification"] * n
+canonical_url_col = [""] * n
+final_doi_col = [""] * n
 
 manual_review = []
 
 with ThreadPoolExecutor(max_workers=10) as executor:
-    futures = {executor.submit(fetch_metadata_for_row, df.iloc[i]): i for i in range(n)}
+    futures = {executor.submit(process_row, df.iloc[i]): i for i in range(n)}
 
     for future in tqdm(as_completed(futures), total=n):
         i = futures[future]
-        resolved_title, authors, universities, countries, caribbean = future.result()
+        resolved_title, authors, universities, countries, caribbean, canonical_url, doi = future.result()
 
         resolved_titles[i] = resolved_title
         authors_col[i] = authors
         universities_col[i] = universities
         countries_col[i] = countries
         caribbean_col[i] = caribbean
+        canonical_url_col[i] = canonical_url
+        final_doi_col[i] = doi
 
-        if caribbean == "Unknown":
-            manual_review.append({"RowIndex": i, "DOI": df.iloc[i].get("DOI", ""), "Title": df.iloc[i].get("Title", "")})
+        if caribbean == "Needs Manual Verification":
+            manual_review.append({
+                "Row_Number": i + 1,
+                "DOI": doi,
+                "Title": df.iloc[i].get("Title", ""),
+                "Reason": "Not found in OpenAlex or Crossref"
+            })
 
-# Attach results to SAME ROWS (this is what you wanted)
 df["Resolved_Title"] = resolved_titles
 df["Authors"] = authors_col
 df["Universities"] = universities_col
 df["Countries"] = countries_col
 df["Caribbean"] = caribbean_col
+df["Canonical_URL"] = canonical_url_col
 
 manual_df = pd.DataFrame(manual_review)
 
-output_file = os.path.splitext(INPUT_FILE)[0] + "_classified.xlsx"
+output_file = os.path.splitext(INPUT_FILE)[0] + "_results.xlsx"
+
 with pd.ExcelWriter(output_file) as writer:
-    df.to_excel(writer, sheet_name="Classified", index=False)
-    manual_df.to_excel(writer, sheet_name="Manual_Review", index=False)
+    df.to_excel(writer, sheet_name="Results", index=False)
+    manual_df.to_excel(writer, sheet_name="Manual Review", index=False)
 
 print(f"\nSaved to: {output_file}")
 print("Done.")
