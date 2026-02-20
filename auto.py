@@ -34,7 +34,10 @@ UNIVERSITIES = {
     "University of the Bahamas",
     "University of the West Indies",
     "Universidad de la Habana",
-    "University of Havana"
+    "University of Havana",
+    "State University of Haiti",
+    "University of Suriname",
+    "Autonomous University of Santo Domingo"
 }
 
 # -----------------------------
