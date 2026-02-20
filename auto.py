@@ -33,7 +33,8 @@ UNIVERSITIES = {
     "Universidad Autónoma de Santo Domingo",
     "University of the Bahamas",
     "University of the West Indies",
-    "Universidad de la Habana"
+    "Universidad de la Habana",
+    "University of Havana"
 }
 
 # -----------------------------
