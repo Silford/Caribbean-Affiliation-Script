@@ -1,8 +1,8 @@
 import pandas as pd
 import ftfy
 
-INPUT_FILE = "mybatch.xlsx"
-OUTPUT_FILE = "articles_fixed_encoding.xlsx"
+INPUT_FILE = "" # Insert Name here
+OUTPUT_FILE = "" # Insert Name here
 
 # Read file
 df = pd.read_excel(INPUT_FILE)
