@@ -4,9 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 import os
 
-# -----------------------------
 # Caribbean Country List
-# -----------------------------
 CARIBBEAN_COUNTRIES = {
     "Jamaica", "Trinidad and Tobago", "Barbados", "Bahamas",
     "Antigua and Barbuda", "Saint Lucia", "Grenada", "Dominica",
@@ -14,12 +12,10 @@ CARIBBEAN_COUNTRIES = {
     "Haiti", "Dominican Republic", "Belize",
     "Montserrat", "Saint Kitts and Nevis",
     "St. Lucia", "St. Vincent and the Grenadines",
-    "St. Kitts and Nevis"
+    "St. Kitts and Nevis", "Cuba"
 }
 
-# -----------------------------
 # Caribbean Universities
-# -----------------------------
 UNIVERSITIES = {
     "University of Guyana",
     "University of the Netherlands Antilles",
@@ -40,9 +36,7 @@ UNIVERSITIES = {
     "Autonomous University of Santo Domingo"
 }
 
-# -----------------------------
 # OpenAlex Lookup
-# -----------------------------
 def fetch_openalex_by_doi(doi):
     try:
         url = f"https://api.openalex.org/works/https://doi.org/{doi}"
@@ -55,9 +49,7 @@ def fetch_openalex_by_doi(doi):
     except:
         return None
 
-# -----------------------------
 # Crossref Lookup (Fallback)
-# -----------------------------
 def fetch_crossref_by_doi(doi):
     try:
         url = f"https://api.crossref.org/works/{doi}"
@@ -70,9 +62,7 @@ def fetch_crossref_by_doi(doi):
     except:
         return None
 
-# -----------------------------
 # Extract + Classify (OpenAlex)
-# -----------------------------
 def extract_openalex(work):
     resolved_title = work.get("display_name", "") or ""
     url = work.get("canonical_url", "") or ""
@@ -109,9 +99,7 @@ def extract_openalex(work):
         url
     )
 
-# -----------------------------
 # Extract + Classify (Crossref)
-# -----------------------------
 def extract_crossref(work, doi=""):
     titles = work.get("title", [])
     resolved_title = titles[0] if titles else ""
@@ -150,9 +138,7 @@ def extract_crossref(work, doi=""):
         url
     )
 
-# -----------------------------
-# Process Row
-# -----------------------------
+# Process each row in the Excel file
 def process_row(row):
     doi = str(row.get("DOI", "")).strip()
 
@@ -161,24 +147,22 @@ def process_row(row):
 
     doi = doi.rstrip(".,);")
 
-    # 1️⃣ Try OpenAlex
+    # Try OpenAlex
     work = fetch_openalex_by_doi(doi)
     if work:
         resolved_title, authors, universities, countries, caribbean, url = extract_openalex(work)
         return resolved_title, authors, universities, countries, caribbean, url
 
-    # 2️⃣ Fallback to Crossref
+    # Fallback to Crossref
     work = fetch_crossref_by_doi(doi)
     if work:
         resolved_title, authors, universities, countries, caribbean, url = extract_crossref(work, doi)
         return resolved_title, authors, universities, countries, caribbean, url
 
-    # 3️⃣ Manual
+    # Manual
     return "", "", "", "", "Needs Manual Verification", ""
 
-# -----------------------------
 # RUN
-# -----------------------------
 INPUT_FILE = "input.xlsx"
 
 df = pd.read_excel(INPUT_FILE)
