@@ -114,7 +114,7 @@ Edit:
 
 Then run: 
 
-    python auto.py
+    python doi_search.py
    
    Output will be saved as:
    
@@ -133,3 +133,9 @@ Then run:
 * Only processes rows with DOI
 * If OpenAlex or CrossRef does not index a DOI, it is marked for manual review
 * Some regional journals may not be indexed in OpenAlex or CrossRef
+
+
+**UPD**
+* Added two new scripts: 1) fix_encoding_issues.py - fixes the encoding issues in the Title and Authors column, 2) title_search.py - allows you to search by Title.
+* You no longer need to create a separate file to process the information. All scripts can work with files containing multiple columns.
+* Will need to install more dependencies but they will be listed at the top of each script file.
