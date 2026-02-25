@@ -140,7 +140,15 @@ def extract_crossref(work, doi=""):
 
 # Process each row in the Excel file
 def process_row(row):
-    doi = str(row.get("DOI", "")).strip()
+    doi = row.get("DOI", "")
+    
+    # Convert to string to handle numeric DOIs from Excel
+    if pd.isna(doi):
+        doi = ""
+    else:
+        doi = str(doi).strip()
+
+    work = None
 
     if not doi:
         return "", "", "", "", "Needs Manual Verification", ""
@@ -163,62 +171,66 @@ def process_row(row):
     return "", "", "", "", "Needs Manual Verification", ""
 
 # RUN
-INPUT_FILE = "input.xlsx"
+def main():
+    INPUT_FILE = "" # Put name of file here with extension. E.g: input.xlsx
 
-df = pd.read_excel(INPUT_FILE)
+    df = pd.read_excel(INPUT_FILE)
 
-df = df.dropna(how="all")
-df = df[df["DOI"].astype(str).str.strip() != ""]
-df = df.reset_index(drop=True)
+    df = df.dropna(how="all")
+    df = df[df["DOI"].astype(str).str.strip() != ""]
+    df = df.reset_index(drop=True)
 
-n = len(df)
+    n = len(df)
 
-resolved_titles = [""] * n
-authors_col = [""] * n
-universities_col = [""] * n
-countries_col = [""] * n
-caribbean_col = ["Needs Manual Verification"] * n
-url_col = [""] * n
+    resolved_titles = [""] * n
+    authors_col = [""] * n
+    universities_col = [""] * n
+    countries_col = [""] * n
+    caribbean_col = ["Needs Manual Verification"] * n
+    url_col = [""] * n
 
-manual_review = []
+    manual_review = []
 
-with ThreadPoolExecutor(max_workers=10) as executor:
-    futures = {executor.submit(process_row, df.iloc[i]): i for i in range(n)}
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(process_row, df.iloc[i]): i for i in range(n)}
 
-    for future in tqdm(as_completed(futures), total=n):
-        i = futures[future]
-        resolved_title, authors, universities, countries, caribbean, url = future.result()
+        for future in tqdm(as_completed(futures), total=n):
+            i = futures[future]
+            resolved_title, authors, universities, countries, caribbean, url = future.result()
 
-        resolved_titles[i] = resolved_title
-        authors_col[i] = authors
-        universities_col[i] = universities
-        countries_col[i] = countries
-        caribbean_col[i] = caribbean
-        url_col[i] = url
+            resolved_titles[i] = resolved_title
+            authors_col[i] = authors
+            universities_col[i] = universities
+            countries_col[i] = countries
+            caribbean_col[i] = caribbean
+            url_col[i] = url
 
-        if caribbean == "Needs Manual Verification":
-            manual_review.append({
-                "Row_Number": i + 1,
-                "DOI": df.iloc[i].get("DOI", ""),
-                "Title": df.iloc[i].get("Title", ""),
-                "URL": url,
-                "Reason": "Not found in OpenAlex or Crossref"
-            })
+            if caribbean == "Needs Manual Verification":
+                manual_review.append({
+                    "Row_Number": i + 1,
+                    "DOI": df.iloc[i].get("DOI", ""),
+                    "Title": df.iloc[i].get("Title", ""),
+                    "URL": url,
+                    "Reason": "Not found in OpenAlex or Crossref"
+                })
 
-df["Resolved_Title"] = resolved_titles
-df["Authors"] = authors_col
-df["Universities"] = universities_col
-df["Countries"] = countries_col
-df["Caribbean"] = caribbean_col
-df["URL"] = url_col
+    df["Resolved_Title"] = resolved_titles
+    df["Authors"] = authors_col
+    df["Universities"] = universities_col
+    df["Countries"] = countries_col
+    df["Caribbean"] = caribbean_col
+    df["URL"] = url_col
 
-manual_df = pd.DataFrame(manual_review)
+    manual_df = pd.DataFrame(manual_review)
 
-output_file = os.path.splitext(INPUT_FILE)[0] + "_results.xlsx"
+    output_file = os.path.splitext(INPUT_FILE)[0] + "Autumn_results.xlsx"
 
-with pd.ExcelWriter(output_file) as writer:
-    df.to_excel(writer, sheet_name="Results", index=False)
-    manual_df.to_excel(writer, sheet_name="Manual Review", index=False)
+    with pd.ExcelWriter(output_file) as writer:
+        df.to_excel(writer, sheet_name="Results", index=False)
+        manual_df.to_excel(writer, sheet_name="Manual Review", index=False)
 
-print(f"\nSaved to: {output_file}")
-print("Done.")
+    print(f"\nSaved to: {output_file}")
+    print("Done.")
+
+if __name__ == "__main__":
+    main()
