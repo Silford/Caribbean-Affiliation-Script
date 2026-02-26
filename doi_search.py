@@ -4,18 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 import os
 
-# Caribbean Country List
-CARIBBEAN_COUNTRIES = {
-    "Jamaica", "Trinidad and Tobago", "Barbados", "Bahamas",
-    "Antigua and Barbuda", "Saint Lucia", "Grenada", "Dominica",
-    "Saint Vincent and the Grenadines", "Guyana", "Suriname",
-    "Haiti", "Dominican Republic", "Belize",
-    "Montserrat", "Saint Kitts and Nevis",
-    "St. Lucia", "St. Vincent and the Grenadines",
-    "St. Kitts and Nevis", "Cuba"
-}
-
-# Caribbean Universities
+# Caribbean Universities ONLY (no country flag anymore)
 UNIVERSITIES = {
     "University of Guyana",
     "University of the Netherlands Antilles",
@@ -36,79 +25,107 @@ UNIVERSITIES = {
     "Autonomous University of Santo Domingo"
 }
 
+
+# -----------------------------
+# Try Opening URL
+# -----------------------------
+def check_url_access(url):
+    if not url:
+        return None, "No"
+
+    try:
+        r = requests.get(url, timeout=10, allow_redirects=True)
+        return r.status_code, "Yes" if r.status_code == 200 else "No"
+    except:
+        return None, "No"
+
+
+# -----------------------------
 # OpenAlex Lookup
+# -----------------------------
 def fetch_openalex_by_doi(doi):
     try:
         url = f"https://api.openalex.org/works/https://doi.org/{doi}"
         r = requests.get(url, timeout=10)
 
-        if r.status_code != 200:
-            return None
-
-        return r.json()
+        if r.status_code == 200:
+            return r.json()
     except:
         return None
 
+    return None
+
+
+# -----------------------------
 # Crossref Lookup (Fallback)
+# -----------------------------
 def fetch_crossref_by_doi(doi):
     try:
         url = f"https://api.crossref.org/works/{doi}"
         r = requests.get(url, timeout=10)
 
-        if r.status_code != 200:
-            return None
-
-        return r.json().get("message")
+        if r.status_code == 200:
+            return r.json().get("message")
     except:
         return None
 
-# Extract + Classify (OpenAlex)
+    return None
+
+
+# -----------------------------
+# Extract from OpenAlex
+# -----------------------------
 def extract_openalex(work):
     resolved_title = work.get("display_name", "") or ""
-    url = work.get("canonical_url", "") or ""
+
+    # Get landing page URL
+    url = None
+    primary_location = work.get("primary_location", {})
+    if primary_location:
+        url = primary_location.get("landing_page_url")
 
     authors_list = []
     universities_list = []
-    countries_list = []
-    is_caribbean = False
+    affiliated_flag = False
 
     for author in work.get("authorships", [])[:10]:
-        authors_list.append(author["author"]["display_name"])
+        name = author.get("author", {}).get("display_name")
+        if name:
+            authors_list.append(name)
 
         for inst in author.get("institutions", []):
-            inst_name = inst.get("display_name", "") or ""
-            country = inst.get("country", "") or ""
-
+            inst_name = inst.get("display_name", "")
             if inst_name:
                 universities_list.append(inst_name)
-                for uni in UNIVERSITIES:
-                    if uni.lower() in inst_name.lower():
-                        is_caribbean = True
 
-            if country:
-                countries_list.append(country)
-                if country in CARIBBEAN_COUNTRIES:
-                    is_caribbean = True
+                if any(u.lower() in inst_name.lower() for u in UNIVERSITIES):
+                    affiliated_flag = True
+
+    status_code, reachable = check_url_access(url)
 
     return (
         resolved_title,
         " | ".join(sorted(set(authors_list))),
         " | ".join(sorted(set(universities_list))),
-        " | ".join(sorted(set(countries_list))),
-        "Yes" if is_caribbean else "No",
-        url
+        "Yes" if affiliated_flag else "No",
+        url,
+        status_code,
+        reachable
     )
 
-# Extract + Classify (Crossref)
+
+# -----------------------------
+# Extract from Crossref
+# -----------------------------
 def extract_crossref(work, doi=""):
     titles = work.get("title", [])
     resolved_title = titles[0] if titles else ""
+
     url = f"https://doi.org/{doi}" if doi else ""
 
     authors_list = []
     universities_list = []
-    countries_list = []
-    is_caribbean = False
+    affiliated_flag = False
 
     for author in work.get("author", [])[:10]:
         name = f"{author.get('given','')} {author.get('family','')}".strip()
@@ -120,62 +137,56 @@ def extract_crossref(work, doi=""):
             if inst_name:
                 universities_list.append(inst_name)
 
-                for uni in UNIVERSITIES:
-                    if uni.lower() in inst_name.lower():
-                        is_caribbean = True
+                if any(u.lower() in inst_name.lower() for u in UNIVERSITIES):
+                    affiliated_flag = True
 
-                for c in CARIBBEAN_COUNTRIES:
-                    if c.lower() in inst_name.lower():
-                        countries_list.append(c)
-                        is_caribbean = True
+    status_code, reachable = check_url_access(url)
 
     return (
         resolved_title,
         " | ".join(sorted(set(authors_list))),
         " | ".join(sorted(set(universities_list))),
-        " | ".join(sorted(set(countries_list))),
-        "Yes" if is_caribbean else "No",
-        url
+        "Yes" if affiliated_flag else "No",
+        url,
+        status_code,
+        reachable
     )
 
-# Process each row in the Excel file
+
+# -----------------------------
+# Process Row
+# -----------------------------
 def process_row(row):
     doi = row.get("DOI", "")
-    
-    # Convert to string to handle numeric DOIs from Excel
-    if pd.isna(doi):
-        doi = ""
-    else:
-        doi = str(doi).strip()
 
-    work = None
+    if pd.isna(doi):
+        return "", "", "", "Needs Manual Verification", "", None, "No"
+
+    doi = str(doi).strip().rstrip(".,);")
 
     if not doi:
-        return "", "", "", "", "Needs Manual Verification", ""
+        return "", "", "", "Needs Manual Verification", "", None, "No"
 
-    doi = doi.rstrip(".,);")
-
-    # Try OpenAlex
+    # Try OpenAlex first
     work = fetch_openalex_by_doi(doi)
     if work:
-        resolved_title, authors, universities, countries, caribbean, url = extract_openalex(work)
-        return resolved_title, authors, universities, countries, caribbean, url
+        return extract_openalex(work)
 
-    # Fallback to Crossref
+    # Fallback Crossref
     work = fetch_crossref_by_doi(doi)
     if work:
-        resolved_title, authors, universities, countries, caribbean, url = extract_crossref(work, doi)
-        return resolved_title, authors, universities, countries, caribbean, url
+        return extract_crossref(work, doi)
 
-    # Manual
-    return "", "", "", "", "Needs Manual Verification", ""
+    return "", "", "", "Needs Manual Verification", "", None, "No"
 
-# RUN
+
+# -----------------------------
+# MAIN
+# -----------------------------
 def main():
-    INPUT_FILE = "" # Put name of file here with extension. E.g: input.xlsx
+    INPUT_FILE = "DOIs_Only.xlsx"
 
     df = pd.read_excel(INPUT_FILE)
-
     df = df.dropna(how="all")
     df = df[df["DOI"].astype(str).str.strip() != ""]
     df = df.reset_index(drop=True)
@@ -185,9 +196,10 @@ def main():
     resolved_titles = [""] * n
     authors_col = [""] * n
     universities_col = [""] * n
-    countries_col = [""] * n
     caribbean_col = ["Needs Manual Verification"] * n
     url_col = [""] * n
+    status_col = [None] * n
+    reachable_col = ["No"] * n
 
     manual_review = []
 
@@ -196,34 +208,36 @@ def main():
 
         for future in tqdm(as_completed(futures), total=n):
             i = futures[future]
-            resolved_title, authors, universities, countries, caribbean, url = future.result()
+
+            resolved_title, authors, universities, caribbean, url, status, reachable = future.result()
 
             resolved_titles[i] = resolved_title
             authors_col[i] = authors
             universities_col[i] = universities
-            countries_col[i] = countries
             caribbean_col[i] = caribbean
             url_col[i] = url
+            status_col[i] = status
+            reachable_col[i] = reachable
 
             if caribbean == "Needs Manual Verification":
                 manual_review.append({
                     "Row_Number": i + 1,
                     "DOI": df.iloc[i].get("DOI", ""),
                     "Title": df.iloc[i].get("Title", ""),
-                    "URL": url,
                     "Reason": "Not found in OpenAlex or Crossref"
                 })
 
     df["Resolved_Title"] = resolved_titles
     df["Authors"] = authors_col
     df["Universities"] = universities_col
-    df["Countries"] = countries_col
-    df["Caribbean"] = caribbean_col
+    df["Caribbean_Affiliated"] = caribbean_col
     df["URL"] = url_col
+    df["URL_Status_Code"] = status_col
+    df["URL_Reachable"] = reachable_col
 
     manual_df = pd.DataFrame(manual_review)
 
-    output_file = os.path.splitext(INPUT_FILE)[0] + "Autumn_results.xlsx"
+    output_file = os.path.splitext(INPUT_FILE)[0] + "_results.xlsx"
 
     with pd.ExcelWriter(output_file) as writer:
         df.to_excel(writer, sheet_name="Results", index=False)
@@ -231,6 +245,7 @@ def main():
 
     print(f"\nSaved to: {output_file}")
     print("Done.")
+
 
 if __name__ == "__main__":
     main()
