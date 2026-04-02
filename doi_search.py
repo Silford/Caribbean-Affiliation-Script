@@ -4,8 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 import os
 
-# Caribbean Universities ONLY (no country flag anymore)
-UNIVERSITIES = {
+UNIVERSITIES = [
     "University of Guyana",
     "University of the Netherlands Antilles",
     "Universidad de Puerto Rico",
@@ -23,11 +22,48 @@ UNIVERSITIES = {
     "State University of Haiti",
     "University of Suriname",
     "Autonomous University of Santo Domingo"
-}
+]
 
-COUNTRIES = {
-    
-}
+COUNTRIES = [
+    "Antigua and Barbuda",
+    "Bahamas",
+    "Barbados",
+    "Cuba",
+    "Dominica",
+    "Dominican Republic",
+    "Grenada",
+    "Haiti",
+    "Jamaica",
+    "Saint Kitts and Nevis",
+    "St. Kitts and Nevis",
+    "Saint Lucia",
+    "St. Lucia",
+    "Saint Vincent and the Grenadines",
+    "St. Vincent and the Grenadines",
+    "Trinidad and Tobago",
+    "Belize",
+    "Guyana",
+    "Suriname",
+    "Anguilla",
+    "Bermuda",
+    "British Virgin Islands",
+    "Cayman Islands",
+    "Montserrat",
+    "Turks and Caicos Islands",
+    "Aruba",
+    "Curaçao",
+    "Sint Maarten",
+    "Bonaire",
+    "Sint Eustatius",
+    "Saba",
+    "Guadeloupe",
+    "Martinique",
+    "Saint Martin",
+    "Saint Barthélemy",
+    "French Guiana",
+    "Puerto Rico",
+    "United States Virgin Islands",
+]
 
 
 def is_caribbean_institution(inst_name):
@@ -208,7 +244,7 @@ def process_row(doi):
 # MAIN
 # -----------------------------
 def main():
-    INPUT_FILE = "test_set.xlsx"
+    INPUT_FILE = "" # Insert Name Here
 
     df = pd.read_excel(INPUT_FILE)
     df = df.dropna(how="all")

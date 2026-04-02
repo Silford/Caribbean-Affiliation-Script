@@ -8,7 +8,7 @@ INPUT_FILE = ""
 OUTPUT_FILE = ""
 MAX_WORKERS = 10
 
-UNIVERSITIES = {
+UNIVERSITIES = [
     "University of Guyana",
     "University of the Netherlands Antilles",
     "Universidad de Puerto Rico",
@@ -17,8 +17,8 @@ UNIVERSITIES = {
     "Caribbean Maritime University",
     "Anton de Kom University of Suriname",
     "University of Technology Jamaica",
-    "Universit\u00e9 d'\u00c9tat d'Ha\u00efti",
-    "Universidad Aut\u00f3noma de Santo Domingo",
+    "Université d'État d'Haïti",
+    "Universidad Autónoma de Santo Domingo",
     "University of the Bahamas",
     "University of the West Indies",
     "Universidad de la Habana",
@@ -26,11 +26,48 @@ UNIVERSITIES = {
     "State University of Haiti",
     "University of Suriname",
     "Autonomous University of Santo Domingo"
-}
+]
 
-COUNTRIES = {
-
-}
+COUNTRIES = [
+    "Antigua and Barbuda",
+    "Bahamas",
+    "Barbados",
+    "Cuba",
+    "Dominica",
+    "Dominican Republic",
+    "Grenada",
+    "Haiti",
+    "Jamaica",
+    "Saint Kitts and Nevis",
+    "St. Kitts and Nevis",
+    "Saint Lucia",
+    "St. Lucia",
+    "Saint Vincent and the Grenadines",
+    "St. Vincent and the Grenadines",
+    "Trinidad and Tobago",
+    "Belize",
+    "Guyana",
+    "Suriname",
+    "Anguilla",
+    "Bermuda",
+    "British Virgin Islands",
+    "Cayman Islands",
+    "Montserrat",
+    "Turks and Caicos Islands",
+    "Aruba",
+    "Curaçao",
+    "Sint Maarten",
+    "Bonaire",
+    "Sint Eustatius",
+    "Saba",
+    "Guadeloupe",
+    "Martinique",
+    "Saint Martin",
+    "Saint Barthélemy",
+    "French Guiana",
+    "Puerto Rico",
+    "United States Virgin Islands",
+]
 
 
 def is_caribbean_country(value):
