@@ -94,6 +94,16 @@ def unique_pipe_join(values):
     return " | ".join(sorted(set(values)))
 
 
+def get_crossref_author_name(author):
+    full_name = str(author.get("name", "")).strip()
+    if full_name:
+        return full_name
+
+    given = str(author.get("given", "")).strip()
+    family = str(author.get("family", "")).strip()
+    return " ".join(part for part in [given, family] if part).strip()
+
+
 def resolve_doi_column(df):
     cleaned_to_original = {
         str(col).strip().lower(): col
@@ -164,10 +174,15 @@ def fetch_crossref_by_doi(doi):
 # Extract from OpenAlex
 # -----------------------------
 def extract_openalex(work, doi=""):
+    authors_list = []
     universities_list = []
     affiliated_flag = False
 
     for author in work.get("authorships", [])[:10]:
+        author_name = author.get("author", {}).get("display_name", "")
+        if author_name:
+            authors_list.append(author_name)
+
         for inst in author.get("institutions", []):
             inst_name = inst.get("display_name", "")
             country_code = inst.get("country_code", "")
@@ -187,6 +202,7 @@ def extract_openalex(work, doi=""):
                 affiliated_flag = True
 
     return (
+        unique_pipe_join(authors_list),
         unique_pipe_join(universities_list),
         "TRUE" if affiliated_flag else "FALSE"
     )
@@ -196,10 +212,15 @@ def extract_openalex(work, doi=""):
 # Extract from Crossref
 # -----------------------------
 def extract_crossref(work, doi=""):
+    authors_list = []
     universities_list = []
     affiliated_flag = False
 
     for author in work.get("author", [])[:10]:
+        author_name = get_crossref_author_name(author)
+        if author_name:
+            authors_list.append(author_name)
+
         author_country = author.get("country", "")
         if is_caribbean_country(author_country):
             affiliated_flag = True
@@ -213,6 +234,7 @@ def extract_crossref(work, doi=""):
                 affiliated_flag = True
 
     return (
+        unique_pipe_join(authors_list),
         unique_pipe_join(universities_list),
         "TRUE" if affiliated_flag else "FALSE"
     )
@@ -224,12 +246,12 @@ def extract_crossref(work, doi=""):
 def process_row(doi):
 
     if pd.isna(doi):
-        return "", "Needs Manual Verification"
+        return "", "", "Needs Manual Verification"
 
     doi = str(doi).strip().rstrip(".,);")
 
     if not doi:
-        return "", "Needs Manual Verification"
+        return "", "", "Needs Manual Verification"
 
     # Try OpenAlex first
     work = fetch_openalex_by_doi(doi)
@@ -241,14 +263,14 @@ def process_row(doi):
     if work:
         return extract_crossref(work, doi)
 
-    return "", "Needs Manual Verification"
+    return "", "", "Needs Manual Verification"
 
 
 # -----------------------------
 # MAIN
 # -----------------------------
 def main():
-    INPUT_FILE = "" # Insert Name Here
+    INPUT_FILE = "7000-8155_batch_fixed.xlsx" # Insert Name Here
 
     df = pd.read_excel(INPUT_FILE)
     df = df.dropna(how="all")
@@ -272,6 +294,7 @@ def main():
 
     n = len(df)
 
+    authors_col = [""] * n
     universities_col = [""] * n
     caribbean_col = ["Needs Manual Verification"] * n
 
@@ -283,7 +306,7 @@ def main():
         for future in tqdm(as_completed(futures), total=n):
             i = futures[future]
 
-            universities, caribbean = future.result()
+            authors, universities, caribbean = future.result()
 
             universities_value = universities
             if caribbean == "FALSE" and not str(universities_value).strip() and source_universities_col is not None:
@@ -292,12 +315,14 @@ def main():
             if caribbean == "FALSE" and not str(universities_value).strip():
                 caribbean = "Manual Review"
 
+            authors_col[i] = authors
             universities_col[i] = universities_value
             caribbean_col[i] = caribbean
 
             if caribbean in {"Needs Manual Verification", "Manual Review"}:
                 manual_review_indices.append(i)
 
+    df["Authors_Extracted"] = authors_col
     df["Universities"] = universities_col
     df["Is_Caribbean_Affiliated"] = caribbean_col
 
