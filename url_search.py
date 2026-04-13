@@ -10,14 +10,19 @@ import html
 
 INPUT_FILE = "7000-8155_batch_manualreview.xlsx"
 OUTPUT_FILE = "7000-8155_batch_manualreview_results.xlsx"
-MAX_WORKERS = 5
-REQUEST_TIMEOUT = 10
-REQUEST_RETRIES = 3
-RETRY_BACKOFF_SECONDS = 1
-CHECK_URL_ACCESS = True
+MAX_WORKERS = 30
+REQUEST_TIMEOUT = 8
+REQUEST_RETRIES = 2
+RETRY_BACKOFF_SECONDS = 0.5
+CHECK_URL_ACCESS = False
 HTTP_HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; URLMetadataBot/1.0; +https://example.org/bot)"
 }
+
+SESS = requests.Session()
+SESS.headers.update(HTTP_HEADERS)
+SESS.mount("http://", requests.adapters.HTTPAdapter(pool_connections=50, pool_maxsize=50))
+SESS.mount("https://", requests.adapters.HTTPAdapter(pool_connections=50, pool_maxsize=50))
 
 UNIVERSITIES = [
     "University of Guyana",
@@ -84,7 +89,6 @@ COUNTRIES = [
     "St. Eustatius"
 ]
 
-
 def is_caribbean_country(value):
     if not value:
         return False
@@ -120,7 +124,7 @@ def request_json(url, expected_json_key=None):
 
     for attempt in range(REQUEST_RETRIES):
         try:
-            response = requests.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=True)
+            response = SESS.get(url, timeout=REQUEST_TIMEOUT, allow_redirects=True)
             if response.status_code == 200:
                 payload = response.json()
                 if expected_json_key is None or expected_json_key in payload:
@@ -141,11 +145,10 @@ def request_html(url):
 
     for attempt in range(REQUEST_RETRIES):
         try:
-            response = requests.get(
+            response = SESS.get(
                 url,
                 timeout=REQUEST_TIMEOUT,
-                allow_redirects=True,
-                headers=HTTP_HEADERS
+                allow_redirects=True
             )
             if response.status_code == 200:
                 return response.text
@@ -349,11 +352,10 @@ def check_url_access(url):
         return None, "NO", "NO URL"
 
     try:
-        response = requests.get(
+        response = SESS.get(
             url,
             timeout=REQUEST_TIMEOUT,
-            allow_redirects=True,
-            headers=HTTP_HEADERS
+            allow_redirects=True
         )
         is_success = 200 <= response.status_code < 300
         return response.status_code, "YES" if is_success else "NO", f"HTTP {response.status_code}"
@@ -470,16 +472,12 @@ def process_row(row):
 
     if not work and article_url:
         webpage_metadata = fetch_webpage_metadata(article_url)
-
         metadata_doi = webpage_metadata.get("doi") if webpage_metadata else None
         if metadata_doi and metadata_doi != doi:
             doi = metadata_doi
             work = fetch_openalex_by_doi(doi)
             if not work:
                 work = fetch_crossref_by_doi(doi)
-
-    if not webpage_metadata and article_url:
-        webpage_metadata = fetch_webpage_metadata(article_url)
 
     if work and "authorships" in work:
         matched_unis, affiliated = extract_affiliation_info(work)
