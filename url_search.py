@@ -8,8 +8,8 @@ import time
 import json
 import html
 
-INPUT_FILE = "7000-8155_batch_manualreview.xlsx"
-OUTPUT_FILE = "7000-8155_batch_manualreview_results.xlsx"
+INPUT_FILE = ""
+OUTPUT_FILE = ""
 MAX_WORKERS = 30
 REQUEST_TIMEOUT = 8
 REQUEST_RETRIES = 2

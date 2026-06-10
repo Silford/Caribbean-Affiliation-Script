@@ -270,7 +270,7 @@ def process_row(doi):
 # MAIN
 # -----------------------------
 def main():
-    INPUT_FILE = "7000-8155_batch_fixed.xlsx" # Insert Name Here
+    INPUT_FILE = "" # Insert Name Here
 
     df = pd.read_excel(INPUT_FILE)
     df = df.dropna(how="all")
