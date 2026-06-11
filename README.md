@@ -27,28 +27,14 @@ The Caribbean Affiliation Script is a comprehensive data analyzing and processin
 * Excel files for input and output data
 
 ### Installation
-1. Clone the repository using `git clone https://github.com/Silford/Caribbean-Affiliation-Script.git`
-2. Install the required libraries using `pip install -r requirements.txt`
-3. Set up your input and output Excel files
+TO BE ADDED
 
 ### Running Locally
-1. Run the `url_search.py` file using `python url_search.py`
-2. Run the `doi_search.py` file using `python doi_search.py`
-3. Run the `fix_encoding_issues.py` file using `python fix_encoding_issues.py`
-
-    ***NB**: It is recommended to run `fix_encoding_issues.py` first to ensure that the other scripts do not falsing flag a source as TRUE (Caribbean associated) or FALSE (not Caribbean associated)*
+TO BE ADDED 
 
 ## 📂 Project Structure
 ```markdown
-Caribbean-Affiliation-Script/
-│
-├── url_search.py
-├── doiSearch.py
-├── fixEncodingIssues.py
-├── requirements.txt
-├── input.xlsx
-├── output.xlsx
-└── README.md
+TO BE ADDED
 ```
 
 ## 🤝 Contributing
