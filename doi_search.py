@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 import os
 
+
 UNIVERSITIES = [
     "University of Guyana",
     "University of the Netherlands Antilles",
@@ -21,7 +22,7 @@ UNIVERSITIES = [
     "University of Havana",
     "State University of Haiti",
     "University of Suriname",
-    "Autonomous University of Santo Domingo"
+    "Autonomous University of Santo Domingo",
 ]
 
 COUNTRIES = [
@@ -48,7 +49,7 @@ COUNTRIES = [
     "Saint Lucia",
     "St. Lucia",
     "Saint Vincent and the Grenadines",
-    "St. Vincent and the Grenandines",
+    "St. Vincent and the Grenadines",
     "St. Vincent & the Grenadines",
     "Trinidad and Tobago",
     "Trinidad & Tobago",
@@ -56,22 +57,21 @@ COUNTRIES = [
     "U.S. Virgin Islands",
     "Haiti",
     "Martinique",
-    "Guadeloupe",
     "Aruba",
     "Curaçao",
     "Saint-Martin",
     "Saint-Barthélemy",
-    "Sint Maarteen",
-    "St. Maarteen",
+    "Sint Maarten",
+    "St. Maarten",
     "Bonaire",
     "Saba",
     "Sint Eustatius",
-    "St. Eustatius"
+    "St. Eustatius",
 ]
 
 
 def is_caribbean_institution(inst_name):
-    return any(u.lower() in inst_name.lower() for u in UNIVERSITIES)
+    return any(u.lower() in str(inst_name).lower() for u in UNIVERSITIES)
 
 
 def is_caribbean_country(value):
@@ -79,11 +79,13 @@ def is_caribbean_country(value):
         return False
 
     value_l = str(value).strip().lower()
+
     if not value_l:
         return False
 
     for country in COUNTRIES:
         country_l = str(country).strip().lower()
+
         if country_l and (value_l == country_l or country_l in value_l):
             return True
 
@@ -96,11 +98,13 @@ def unique_pipe_join(values):
 
 def get_crossref_author_name(author):
     full_name = str(author.get("name", "")).strip()
+
     if full_name:
         return full_name
 
     given = str(author.get("given", "")).strip()
     family = str(author.get("family", "")).strip()
+
     return " ".join(part for part in [given, family] if part).strip()
 
 
@@ -132,47 +136,41 @@ def resolve_optional_column(df, candidates):
 
     for candidate in candidates:
         key = str(candidate).strip().lower()
+
         if key in cleaned_to_original:
             return cleaned_to_original[key]
 
     return None
 
 
-# -----------------------------
-# OpenAlex Lookup
-# -----------------------------
 def fetch_openalex_by_doi(doi):
     try:
         url = f"https://api.openalex.org/works/https://doi.org/{doi}"
-        r = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=10)
 
-        if r.status_code == 200:
-            return r.json()
+        if response.status_code == 200:
+            return response.json()
+
     except requests.RequestException:
         return None
 
     return None
 
 
-# -----------------------------
-# Crossref Lookup (Fallback)
-# -----------------------------
 def fetch_crossref_by_doi(doi):
     try:
         url = f"https://api.crossref.org/works/{doi}"
-        r = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=10)
 
-        if r.status_code == 200:
-            return r.json().get("message")
+        if response.status_code == 200:
+            return response.json().get("message")
+
     except requests.RequestException:
         return None
 
     return None
 
 
-# -----------------------------
-# Extract from OpenAlex
-# -----------------------------
 def extract_openalex(work, doi=""):
     authors_list = []
     universities_list = []
@@ -180,6 +178,7 @@ def extract_openalex(work, doi=""):
 
     for author in work.get("authorships", [])[:10]:
         author_name = author.get("author", {}).get("display_name", "")
+
         if author_name:
             authors_list.append(author_name)
 
@@ -187,7 +186,8 @@ def extract_openalex(work, doi=""):
             inst_name = inst.get("display_name", "")
             country_code = inst.get("country_code", "")
             country_name = inst.get("country", "")
-            country_geo = inst.get("geo", {}).get("country", "") if isinstance(inst.get("geo", {}), dict) else ""
+            geo = inst.get("geo", {})
+            country_geo = geo.get("country", "") if isinstance(geo, dict) else ""
 
             if inst_name:
                 universities_list.append(inst_name)
@@ -204,13 +204,10 @@ def extract_openalex(work, doi=""):
     return (
         unique_pipe_join(authors_list),
         unique_pipe_join(universities_list),
-        "TRUE" if affiliated_flag else "FALSE"
+        "TRUE" if affiliated_flag else "FALSE",
     )
 
 
-# -----------------------------
-# Extract from Crossref
-# -----------------------------
 def extract_crossref(work, doi=""):
     authors_list = []
     universities_list = []
@@ -218,15 +215,18 @@ def extract_crossref(work, doi=""):
 
     for author in work.get("author", [])[:10]:
         author_name = get_crossref_author_name(author)
+
         if author_name:
             authors_list.append(author_name)
 
         author_country = author.get("country", "")
+
         if is_caribbean_country(author_country):
             affiliated_flag = True
 
         for aff in author.get("affiliation", []):
             inst_name = aff.get("name", "")
+
             if inst_name:
                 universities_list.append(inst_name)
 
@@ -236,15 +236,11 @@ def extract_crossref(work, doi=""):
     return (
         unique_pipe_join(authors_list),
         unique_pipe_join(universities_list),
-        "TRUE" if affiliated_flag else "FALSE"
+        "TRUE" if affiliated_flag else "FALSE",
     )
 
 
-# -----------------------------
-# Process Row
-# -----------------------------
 def process_row(doi):
-
     if pd.isna(doi):
         return "", "", "Needs Manual Verification"
 
@@ -253,35 +249,31 @@ def process_row(doi):
     if not doi:
         return "", "", "Needs Manual Verification"
 
-    # Try OpenAlex first
     work = fetch_openalex_by_doi(doi)
+
     if work:
         return extract_openalex(work, doi)
 
-    # Fallback Crossref
     work = fetch_crossref_by_doi(doi)
+
     if work:
         return extract_crossref(work, doi)
 
     return "", "", "Needs Manual Verification"
 
 
-# -----------------------------
-# MAIN
-# -----------------------------
-def main():
-    INPUT_FILE = "" # Insert Name Here
-
-    df = pd.read_excel(INPUT_FILE)
+def process_doi_file(input_file, output_file=None, max_workers=10):
+    df = pd.read_excel(input_file)
     df = df.dropna(how="all")
 
-    # Standardize headers to avoid issues with leading/trailing spaces.
     df.columns = [str(col).strip() for col in df.columns]
+
     df = df.loc[:, [
         not str(col).lower().startswith("unnamed")
         and not str(col).lower().endswith("_extracted")
         for col in df.columns
     ]]
+
     doi_column = resolve_doi_column(df)
 
     df = df[df[doi_column].astype(str).str.strip() != ""]
@@ -289,27 +281,49 @@ def main():
 
     source_universities_col = resolve_optional_column(
         df,
-        ["universities", "university", "affiliation", "affiliations", "institution", "institutions"]
+        [
+            "universities",
+            "university",
+            "affiliation",
+            "affiliations",
+            "institution",
+            "institutions",
+        ],
     )
 
-    n = len(df)
+    row_count = len(df)
 
-    authors_col = [""] * n
-    universities_col = [""] * n
-    caribbean_col = ["Needs Manual Verification"] * n
+    authors_col = [""] * row_count
+    universities_col = [""] * row_count
+    caribbean_col = ["Needs Manual Verification"] * row_count
 
     manual_review_indices = []
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {executor.submit(process_row, df.iloc[i].get(doi_column, "")): i for i in range(n)}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(process_row, df.iloc[i].get(doi_column, "")): i
+            for i in range(row_count)
+        }
 
-        for future in tqdm(as_completed(futures), total=n):
+        for future in tqdm(
+            as_completed(futures),
+            total=row_count,
+            desc="Processing DOI rows",
+            unit="row",
+            dynamic_ncols=True,
+            colour="cyan",
+        ):
             i = futures[future]
 
             authors, universities, caribbean = future.result()
 
             universities_value = universities
-            if caribbean == "FALSE" and not str(universities_value).strip() and source_universities_col is not None:
+
+            if (
+                caribbean == "FALSE"
+                and not str(universities_value).strip()
+                and source_universities_col is not None
+            ):
                 universities_value = str(df.iloc[i].get(source_universities_col, "")).strip()
 
             if caribbean == "FALSE" and not str(universities_value).strip():
@@ -328,15 +342,20 @@ def main():
 
     manual_df = df.iloc[manual_review_indices].copy()
 
-    output_file = os.path.splitext(INPUT_FILE)[0] + "_results.xlsx"
+    if output_file is None:
+        output_file = os.path.splitext(input_file)[0] + "_results.xlsx"
 
     with pd.ExcelWriter(output_file) as writer:
         df.to_excel(writer, sheet_name="Results", index=False)
         manual_df.to_excel(writer, sheet_name="Manual Review", index=False)
 
-    print(f"\nSaved to: {output_file}")
-    print("Done.")
+    print(f"\nSaved DOI results to: {output_file}")
+
+    return output_file
 
 
 if __name__ == "__main__":
-    main()
+    INPUT_FILE = ""
+    OUTPUT_FILE = None
+
+    process_doi_file(INPUT_FILE, OUTPUT_FILE)

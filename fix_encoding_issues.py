@@ -1,28 +1,50 @@
 import pandas as pd
 import ftfy
+from tqdm import tqdm
 
-INPUT_FILE = "" # Insert Name here
-OUTPUT_FILE = "" # Insert Name here
 
-# Read file
-df = pd.read_excel(INPUT_FILE)
+def fix_encoding(input_file, output_file):
+    df = pd.read_excel(input_file)
 
-# Clean column names (removes hidden spaces)
-df.columns = df.columns.str.strip()
+    # Clean column names
+    df.columns = df.columns.str.strip()
 
-# Fix encoding in Title and Authors columns
-columns_to_fix = ["Title", "Authors"]
+    # Fix encoding in selected columns
+    columns_to_fix = ["Title", "Authors"]
 
-for col in columns_to_fix:
-    if col in df.columns:
-        df[col] = df[col].apply(
-            lambda x: ftfy.fix_text(str(x)) if pd.notna(x) else x
-        )
+    available_columns = [col for col in columns_to_fix if col in df.columns]
+
+    for col in columns_to_fix:
+        if col in df.columns:
+            df[col] = [
+                ftfy.fix_text(str(value)) if pd.notna(value) else value
+                for value in tqdm(
+                    df[col],
+                    desc=f"Fixing {col}",
+                    unit="cell",
+                    dynamic_ncols=True,
+                    colour="cyan",
+                    leave=len(available_columns) == 1,
+                )
+            ]
+        else:
+            print(f"Column not found: {col}")
+
+    if not available_columns:
+        print("No supported text columns found to clean.")
     else:
-        print(f"Column not found: {col}")
+        print(
+            "Encoding fixed for: "
+            + ", ".join(available_columns)
+        )
 
-# Save corrected file
-df.to_excel(OUTPUT_FILE, index=False)
+    df.to_excel(output_file, index=False)
 
-print("Encoding fixed for Title and Authors.")
-print("Saved as:", OUTPUT_FILE)
+    print("Saved cleaned workbook to:", output_file)
+
+
+if __name__ == "__main__":
+    INPUT_FILE = ""
+    OUTPUT_FILE = ""
+
+    fix_encoding(INPUT_FILE, OUTPUT_FILE)
